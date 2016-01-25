@@ -18,47 +18,51 @@
 #import "JUEmptyView.h"
 
 @implementation JUEmptyView
-@synthesize title, titleFont, titleColor, backgroundColor;
-@synthesize forceShow;
+
+@synthesize title = _title;
+@synthesize titleFont = _titleFont;
+@synthesize titleColor = _titleColor;
+@synthesize backgroundColor = _backgroundColor;
+@synthesize forceShow = _forceShow;
 
 #pragma mark -
 #pragma mark Setter
 
 - (void)setTitle:(NSString *)ttitle
 {
-    [title autorelease];
-    title = [ttitle copy];
+    [_title autorelease];
+    _title = [ttitle copy];
     
     [self setNeedsDisplay:YES];
 }
 
 - (void)setTitleFont:(NSFont *)ttitleFont
 {
-    [titleFont autorelease];
-    titleFont = [ttitleFont retain];
+    [_titleFont autorelease];
+    _titleFont = [ttitleFont retain];
     
     [self setNeedsDisplay:YES];
 }
 
 - (void)setTitleColor:(NSColor *)ttitleColor
 {
-    [titleColor autorelease];
-    titleColor = [ttitleColor retain];
+    [_titleColor autorelease];
+    _titleColor = [ttitleColor retain];
     
     [self setNeedsDisplay:YES];
 }
 
 - (void)setBackgroundColor:(NSColor *)tbackgroundColor
 {
-    [backgroundColor autorelease];
-    backgroundColor = [tbackgroundColor retain];
+    [_backgroundColor autorelease];
+    _backgroundColor = [tbackgroundColor retain];
     
      [self setNeedsDisplay:YES];
 }
 
 - (void)setForceShow:(BOOL)tforceShow
 {
-    forceShow = tforceShow;
+    _forceShow = tforceShow;
     
     [self setNeedsDisplay:YES];
 }
@@ -66,35 +70,31 @@
 #pragma mark -
 #pragma Drawing
 
-- (void)drawRect:(NSRect)dirtyRect
-{
-    if(forceShow || [[self subviews] count] == 0)
-    {
-        NSRect rect = [self bounds];
-        NSSize size = [title sizeWithAttributes:[NSDictionary dictionaryWithObject:titleFont forKey:NSFontAttributeName]];
-        NSSize bezierSize = NSMakeSize(size.width + 40.0, size.height + 20.0);
-        NSRect drawRect;
-        
-        
-        // Background
-        drawRect = NSMakeRect(0.0, 0.0, bezierSize.width, bezierSize.height);
-        drawRect.origin.x = round((rect.size.width * 0.5) - (bezierSize.width * 0.5));
-        drawRect.origin.y = round((rect.size.height * 0.5) - (bezierSize.height * 0.5));
-        
-        [backgroundColor setFill];
-        [[NSBezierPath bezierPathWithRoundedRect:drawRect xRadius:8.0 yRadius:8.0] fill];
-        
-        
-        // String
-        drawRect = NSMakeRect(0.0, 0.0, size.width, size.height);
-        drawRect.origin.x = round((rect.size.width * 0.5) - (size.width * 0.5));
-        drawRect.origin.y = round((rect.size.height * 0.5) - (size.height * 0.5));
-        
-        [title drawInRect:drawRect withAttributes:[NSDictionary dictionaryWithObjectsAndKeys:titleColor, NSForegroundColorAttributeName, 
-                                                                                             titleFont, NSFontAttributeName, nil]];
+- (void)drawRect:(NSRect)dirtyRect {
+    if (forceShow || (self.subviews.count == 0)) {
+		
+		// Makes sure that drawing is needed
+		if ((self.title.length > 0) && (self.titleColor != nil) && (self.titleFont != nil) && (self.backgroundColor != nil)) {
+			
+			// Configure caption style
+			NSMutableParagraphStyle *style = [[NSMutableParagraphStyle alloc] init];
+			style.lineBreakMode = NSLineBreakByWordWrapping;
+			style.alignment = NSTextAlignmentCenter;
+			NSDictionary *fontColorMultilineAttributes = @{ NSForegroundColorAttributeName: self.titleColor, NSFontAttributeName: self.titleFont, NSParagraphStyleAttributeName: style };
+			[style release];
+			
+			// Inset centered caption from bounds
+			CGFloat const HorizontalInset = 20.0;
+			CGFloat const VerticalInset = 10.0;
+			NSEdgeInsets contentInsets = NSEdgeInsetsMake(HorizontalInset, HorizontalInset, VerticalInset, VerticalInset);
+			
+			// Draw multiline title using current settings
+			NSAttributedString *attributedTitle = [[NSAttributedString alloc] initWithString:self.title attributes:fontColorMultilineAttributes];
+			[self drawAttributedCaption:attributedTitle inBounds:self.bounds withInsets:contentInsets radius:8.0 usingFillColor:self.backgroundColor];
+			[attributedTitle release];
+		}
     }
 }
-
 
 - (void)willRemoveSubview:(NSView *)subview
 {
@@ -171,12 +171,43 @@
 
 - (void)dealloc
 {
-    [title release];
-    [titleFont release];
-    [titleColor release];
-    [backgroundColor release];
+    [_title release];
+    [_titleFont release];
+    [_titleColor release];
+    [_backgroundColor release];
     
     [super dealloc];
+}
+
+#pragma mark - Private API
+
+- (void)drawAttributedCaption:(NSAttributedString *)caption inBounds:(NSRect)bounds withInsets:(NSEdgeInsets)insets radius:(double)radius usingFillColor:(NSColor *)fillColor {
+
+	// Inset caption title
+	CGSize captionSize = bounds.size;
+	if (!NSEdgeInsetsEqual(insets, NSEdgeInsetsZero)) {
+		captionSize.width -= (insets.left + insets.right);
+		captionSize.height -= (insets.top + insets.bottom);
+	}
+
+	// Calculated centered area for text
+	NSRect captionRect = NSIntegralRect([caption boundingRectWithSize:captionSize options:NSStringDrawingUsesLineFragmentOrigin|NSStringDrawingUsesFontLeading]);
+	captionRect.origin.x = (CGRectGetMidX(bounds) - CGRectGetWidth(captionRect) / 2.0);
+	captionRect.origin.y = (CGRectGetMidY(bounds) - CGRectGetHeight(captionRect) / 2.0);
+
+	// Calculate required area for background
+	CGRect fillRect = captionRect;
+	if (!NSEdgeInsetsEqual(insets, NSEdgeInsetsZero)) {
+		fillRect.origin.x -= insets.left;
+		fillRect.origin.y -= insets.top;
+		fillRect.size.width += insets.left + insets.right;
+		fillRect.size.height += insets.top + insets.bottom;
+	}
+
+	// Draw background and text if needed
+	[fillColor setFill];
+	[NSBezierPath bezierPathWithRoundedRect:fillRect xRadius:radius yRadius:radius];
+	[caption drawInRect:captionRect];
 }
 
 @end
